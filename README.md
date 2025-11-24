@@ -10,28 +10,33 @@
 # Documentación
 ## Descripción de la arquitectura
 
+
 ### Proceso
-Primero se modeló el controlador maestro (master) para el sensor BH1750 siguiendo la hoja de datos (datasheet). Se verificó que el intercambio I2C siguiera el siguiente flujo:
 
-1. Se genera la condición de START y se espera a que la línea SDA/SCL se estabilice.
-2. El maestro envía la dirección del dispositivo (0x23) junto con el bit R/W en modo escritura para configurar el modo de resolución.
-3. El maestro libera la línea (estado Hi-Z) y el esclavo responde con ACK (baja la línea) para confirmar la recepción.
-4. El maestro envía el comando de alta resolución; a continuación se envía la dirección con el bit R/W en modo lectura (R/W = 1) para solicitar datos.
-5. El maestro vuelve a liberar la línea (Hi-Z). El esclavo emite ACK seguido de los 8 bits de datos.
-6. Se repite la lectura para obtener primero el MSB y luego el LSB.
-7. Se genera la condición de STOP y se espera el tiempo de conversión (≈180 ms).
-8. Se calcula el valor de iluminancia (lux) concatenando MSB y LSB y aplicando la constante de calibración: LUX = ((MSB << 8) | LSB) / 1.2.
-9. El proceso se repite periódicamente para actualizar la medida.
+Se modeló y verificó el controlador maestro (master) para el sensor BH1750 tomando como referencia la hoja de datos y la implementación disponible en el repositorio [-FPGA-I2C-Driver-GY302-BH1750](https://github.com/dac70r/-FPGA-I2C-Driver-GY302-BH1750). El desarrollo siguió un flujo I2C estandarizado, comprobado mediante simulación y pruebas de laboratorio:
 
-La simulación en GTKWave corroboró el correcto funcionamiento de la máquina de estados (FSM) del controlador I2C.
+- Flujo I2C implementado:
+	1. Generación de la condición de START y estabilización de las líneas SDA/SCL.
+	2. Envío de la dirección del dispositivo (`0x23`) con el bit R/W en `0` (escritura) para configurar el modo de operación.
+	3. El maestro libera la línea (estado Hi-Z); el esclavo responde con `ACK` (baja la línea) si acepta la dirección.
+	4. Envío del comando de alta resolución. A continuación, se prepara la lectura enviando la dirección con R/W = `1` (lectura).
+	5. El maestro libera la línea (Hi-Z); el esclavo responde con `ACK` y transmite 8 bits de datos.
+	6. Repetición de la lectura para obtener MSB y LSB (dos bytes consecutivos).
+	7. Generación de la condición de STOP y espera del tiempo de conversión (~180 ms) antes de leer de nuevo.
+	8. Cálculo de la iluminancia: LUX = ((MSB << 8) | LSB) / 1.2 (concatenación de MSB y LSB seguida de la constante de calibración indicada en la datasheet).
+	9. El proceso se repite periódicamente para mantener la medida actualizada.
 
-Para la pantalla LCD se adaptó la arquitectura anterior incorporando un decodificador BCD que transforma el valor de 16 bits del sensor en los caracteres necesarios (hasta 5 dígitos) para mostrar el `lux_value`.
+- Verificación y simulación:
+	- La FSM del controlador I2C fue validada mediante simulación en GTKWave, comprobando transiciones, ACK/NACK y tiempos de conversión.
 
-Antes de conectar el sensor, se verificó el controlador del LCD con pruebas manuales usando 8 interruptores y 8 pines de salida; durante estas pruebas se detectó y documentó un pin defectuoso en la FPGA.
+- Integración con LCD:
+	- Se adaptó la arquitectura para incorporar un decodificador BCD que transforma el valor de 16 bits del sensor en hasta 5 caracteres para mostrar el `lux_value` en la pantalla LCD.
+	- Antes de conectar el sensor se realizaron pruebas con 8 interruptores y 8 pines de salida para verificar el controlador del LCD; durante estas pruebas se detectó y documentó un pin defectuoso en la FPGA.
+	- Tras validar ambos módulos por separado (sensor y LCD), se integraron en el módulo `top`.
 
-Una vez validados por separado el módulo del sensor y el controlador del LCD, se integraron ambos en el módulo `top`.
-
-Nota: en el Pin Planner se especificó el uso de pines a 3.3 V (LVCMOS) para permitir el comportamiento tri-state requerido por el bus I2C. ![alt text](images/LVCMOS_Pins.png)
+- Notas de implementación:
+	- En el Pin Planner se especificó el uso de pines a `3.3 V` (LVCMOS) para permitir el comportamiento tri-state requerido por el bus I2C.
+	- Referencia de la implementación usada: `-FPGA-I2C-Driver-GY302-BH1750` (enlace arriba).
  
 ## Diagramas de la arquitectura
 
