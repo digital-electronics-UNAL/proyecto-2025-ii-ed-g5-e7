@@ -35,7 +35,7 @@ Se modeló y verificó el controlador maestro (master) para el sensor BH1750 tom
 	- Tras validar ambos módulos por separado (sensor y LCD), se integraron en el módulo `top`.
 
 - Notas de implementación:
-	- En el Pin Planner se especificó el uso de pines a `3.3 V` (LVCMOS) para permitir el comportamiento tri-state requerido por el bus I2C.
+	- En el Pin Planner se especificó el uso de pines a `3.3 V` (LVCMOS) para permitir el comportamiento tri-state requerido por el bus I2C.![alt](images/LVCMOS_Pins.png)
 	- Referencia de la implementación usada: `-FPGA-I2C-Driver-GY302-BH1750` (enlace arriba).
  
 ## Diagramas de la arquitectura
