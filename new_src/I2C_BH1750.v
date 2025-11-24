@@ -27,6 +27,7 @@
 // Module Name: 			I2C_BH1750
 // Sensor Model: 			GY302 - BH1750 Ambient Light Sensor
 // Project Description: I2C Interface between FPGA & BH1750 Sensor
+// Modified:             Added lux output wire
 // 
 //////////////////////////////////////////////////////////////////////////////////
 
@@ -37,6 +38,10 @@ module I2C_BH1750(
 	 // Core Signals: I2C_SCLK and I2C_SDA
     output  I2C_SCLK,                       // I2C_SCLK
     inout   I2C_SDA,                        // I2C_SDA
+	 
+	 // Lux Output
+	 output reg [15:0] lux_value,           // 16-bit lux value from sensor
+	 output reg lux_valid,                  // Indicates valid lux reading
 	 
 	 // Debug Signals (Signal Tap) - Remove to conserve resources
     output  		I2C_SCLK_Ref,                   	// Reference Clock
@@ -80,6 +85,10 @@ reg 			sda_out_en              = 1'b1;             	// The SDA_OUT_EN Signal, On
 reg [7:0]   i2c_clock_cycles    		= 8'd0;             	// Register for keeping track of number of Clock Cycles elapsed
 reg         i2c_sda_state       		= 1'd0;             	// I2C_SDA local register
 reg [31:0]  counter_last 		  		= 32'd0;				 	// Counter for Delay after each I2C Read
+
+// Data capture registers for lux reading
+reg [7:0] lux_byte_high = 8'd0;         // High byte of lux data
+reg [7:0] lux_byte_low = 8'd0;          // Low byte of lux data
 
 // COMMANDS
 reg [7:0] write_command = {7'b0100_011, 1'b0};  // Concatenate 0x23 and Write bit: 0
@@ -141,6 +150,56 @@ begin
 			sda_out_en = 'd0;
 	else
 		sda_out_en = 'd1;
+end
+
+// Data capture logic: Sample I2C_SDA during READ state on rising edges of SCLK
+always @ (posedge i2c_sclk_local_200khz)
+begin
+    if(presentState == READ && i2c_sclk_local_output == 1'b1 && sda_out_en == 1'b0)
+    begin
+        case(i2c_clock_cycles)
+            // Capture high byte (first 8 bits after address+ACK)
+            19: lux_byte_high[7] <= I2C_SDA;
+            21: lux_byte_high[6] <= I2C_SDA;
+            23: lux_byte_high[5] <= I2C_SDA;
+            25: lux_byte_high[4] <= I2C_SDA;
+            27: lux_byte_high[3] <= I2C_SDA;
+            29: lux_byte_high[2] <= I2C_SDA;
+            31: lux_byte_high[1] <= I2C_SDA;
+            33: lux_byte_high[0] <= I2C_SDA;
+            
+            // Capture low byte (second 8 bits after ACK)
+            37: lux_byte_low[7] <= I2C_SDA;
+            39: lux_byte_low[6] <= I2C_SDA;
+            41: lux_byte_low[5] <= I2C_SDA;
+            43: lux_byte_low[4] <= I2C_SDA;
+            45: lux_byte_low[3] <= I2C_SDA;
+            47: lux_byte_low[2] <= I2C_SDA;
+            49: lux_byte_low[1] <= I2C_SDA;
+            51: lux_byte_low[0] <= I2C_SDA;
+            
+            default: begin end
+        endcase
+    end
+end
+
+// Update lux_value and lux_valid when data capture is complete
+always @ (posedge i2c_sclk_local_200khz)
+begin
+    if(!reset_n)
+    begin
+        lux_value <= 16'd0;
+        lux_valid <= 1'b0;
+    end
+    else if(presentState == STOP_READ && nextState == STOP_READ_READY)
+    begin
+        lux_value <= {lux_byte_high, lux_byte_low};
+        lux_valid <= 1'b1;
+    end
+    else if(presentState == STOP_READ_STABLE && counter_last == 32'd0)
+    begin
+        lux_valid <= 1'b0;  // Clear valid flag before next read
+    end
 end
 	
 // I2C_SDA: Assert/Deassert the I2C_SDA Signal at various State Machine States

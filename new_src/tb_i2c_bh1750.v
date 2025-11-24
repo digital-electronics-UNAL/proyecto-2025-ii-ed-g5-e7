@@ -74,7 +74,7 @@ module tb_i2c_bh1750;
         $dumpvars(0, tb_i2c_bh1750);
 
         // run long enough to allow multiple write/read cycles
-        #5000000; // run for 5 ms worth at default timescale (adjust as needed)
+        #500000; // run for 5 ms worth at default timescale (adjust as needed)
         $display("Simulation finished");
         $finish;
     end
