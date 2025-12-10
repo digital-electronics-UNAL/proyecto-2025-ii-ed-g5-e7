@@ -2,7 +2,7 @@
 // tb_i2c_bh1750.v
 // Testbench that instantiates your I2C_BH1750 master module and the BH1750_emul slave.
 // Produces i2c_bh1750.vcd for GTKWave.
-`include "I2C_ADS1115.v"
+`include "I2C_ADS1115_GEM.v"
 `include "BH1750_emul.v"
 module tb_i2c_ads1115;
 
@@ -19,7 +19,7 @@ module tb_i2c_ads1115;
     // Create wires for debug I/O
     wire I2C_SCLK_Ref;
     wire I2C_SCLK_Ref_200k;
-    wire [3:0] presentState_output;
+    wire [5:0] presentState_output;
     wire [7:0] i2c_clock_cycles_output;
     wire [7:0] i2c_bit_count_output;
     wire sda_out_en_output;
@@ -75,7 +75,7 @@ module tb_i2c_ads1115;
         $dumpvars(0, tb_i2c_ads1115);
 
         // run long enough to allow multiple write/read cycles
-        #500000; // run for 5 ms worth at default timescale (adjust as needed)
+        #50000000; // run for 5 ms worth at default timescale (adjust as needed)
         $display("Simulation finished");
         $finish;
     end

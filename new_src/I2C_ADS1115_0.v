@@ -1,27 +1,28 @@
 // I2C_ADS1115.v
+// Minimal changes from original I2C_BH1750: module renamed, address changed to ADS1115 (0x48).
 `timescale 1ns/1ps
 module I2C_ADS1115(
     input   system_clock,
     input   reset_n,
 	 
 	 // Core Signals: I2C_SCLK and I2C_SDA
-    output  I2C_SCLK,
-    inout   I2C_SDA,
+    output  I2C_SCLK,                       // I2C_SCLK
+    inout   I2C_SDA,                        // I2C_SDA
 	 
 	 // Lux Output (reused name; now holds 16-bit ADC/reading)
-	 output reg [15:0] lux_value,
-	 output reg lux_valid,
+	 output reg [15:0] lux_value,           // 16-bit value from sensor
+	 output reg lux_valid,                  // Indicates valid reading
 	 
-	 // Debug Signals
-    output  		I2C_SCLK_Ref,
-    output  		I2C_SCLK_Ref_200k,
-    output  [3:0] presentState_output,
-    output  [7:0] i2c_clock_cycles_output,
-    output  [7:0] i2c_bit_count_output,
-	 output			sda_out_en_output,
-	 input			read_I2C_SDA,
-	 input			read_I2C_SCLK,
-	 output  [31:0]counter_last_output
+	 // Debug Signals (Signal Tap) - Remove to conserve resources
+    output  		I2C_SCLK_Ref,                   	// Reference Clock
+    output  		I2C_SCLK_Ref_200k,              	// Reference Clock 200khz
+    output  [3:0] presentState_output,					// Displays presentState 
+    output  [7:0] i2c_clock_cycles_output,			// Displays i2c_clock_cycles
+    output  [7:0] i2c_bit_count_output,				// Displays i2c_bit_count
+	 output			sda_out_en_output,					// Displays sda_out_en
+	 input			read_I2C_SDA,							// Probes the I2C_SDA Signal
+	 input			read_I2C_SCLK,							// Probes the I2C_SCLK Signal
+	 output  [31:0]counter_last_output					// Counter for Delay after each I2C Read
 );
 
 // States Machine States (use 4-bit literals to match regs)
@@ -43,32 +44,34 @@ localparam STOP_READ_READY              = 4'd14;
 localparam STOP_READ_STABLE             = 4'd15;
    
 // Counters and Registers (unchanged sizes)
-reg [3:0] 	presentState      		= RESET;
-reg [3:0] 	nextState         		= RESET;
-reg [31:0] 	count            			= 32'd0;
-reg [31:0] 	count_2         			= 32'd0;
-reg 			i2c_sclk_local          = 1'b1;
-reg 			i2c_sclk_local_200khz   = 1'b1;
-reg 			i2c_sclk_local_output   = 1'b1;
-reg 			sda_out_en              = 1'b1;
-reg [7:0]   i2c_clock_cycles    		= 8'd0;
-reg         i2c_sda_state       		= 1'd0;
-reg [31:0]  counter_last 		  		= 32'd0;
+reg [3:0] 	presentState      		= RESET;            	// State Machine States 
+reg [3:0] 	nextState         		= RESET;            	// State Machine States 
+reg [31:0] 	count            			= 32'd0;            	// Generating 100khz Clock for Reference
+reg [31:0] 	count_2         			= 32'd0;            	// Generating 200khz Clock to drive State Machines
+reg 			i2c_sclk_local          = 1'b1;             	// The state of the Clock 100khz (HIGH/LOW)
+reg 			i2c_sclk_local_200khz   = 1'b1;             	// The state of the Clock 200khz (HIGH/LOW)
+reg 			i2c_sclk_local_output   = 1'b1;             	// The state of I2C_SCLK, used in State Machine Output Logic
+reg 			sda_out_en              = 1'b1;             	// The SDA_OUT_EN Signal, On for SDA Output to slave, Off for SDA Input from slave
+reg [7:0]   i2c_clock_cycles    		= 8'd0;             	// Register for keeping track of number of Clock Cycles elapsed
+reg         i2c_sda_state       		= 1'd0;             	// I2C_SDA local register
+reg [31:0]  counter_last 		  		= 32'd0;				 	// Counter for Delay after each I2C Read
 
 // Data capture registers for reading
-reg [7:0] lux_byte_high = 8'd0;
-reg [7:0] lux_byte_low = 8'd0;
+reg [7:0] lux_byte_high = 8'd0;         // High byte of data
+reg [7:0] lux_byte_low = 8'd0;          // Low byte of data
 
 // ---------------------------
 // COMMANDS (minimal change to ADS1115 address)
 // ---------------------------
 // ADS1115 default 7-bit address = 0x48 => 7'b100_1000
-reg [7:0] write_command = {7'b100_1000, 1'b0};  // ADS1115 write (8-bit view)
-reg [7:0] read_command  = {7'b100_1000, 1'b1};  // ADS1115 read  (8-bit view)
+reg [7:0] write_command = {7'b100_1000, 1'b0};  // ADS1115 write (0x90 if viewed as 8-bit)
+reg [7:0] read_command  = {7'b100_1000, 1'b1};  // ADS1115 read  (0x91 if viewed as 8-bit)
 
-// Second config byte — user added these; fixed name
-reg [7:0] write_configuration_1 = 8'hC3;//1100_0011
-reg [7:0] write_configuration_2 = 8'h83;//1000_0011
+// Keep a single-byte placeholder config (minimal change). 
+// NOTE: ADS1115 actually requires a 2-byte config write — if you want full config support
+// I will add the extra byte + small state changes on request.
+reg [7:0] write_configuration_ 1 = 8'h11;
+reg [7:0] write_configuration_2 = 8'h11;
 
 // Creates a 100kHz clock for I2C SCLK
 always @ (posedge system_clock)
@@ -98,10 +101,8 @@ end
 // State Machine Next State Logic 
 always @ (posedge i2c_sclk_local_200khz)
 begin
-    if(!reset_n) begin
+    if(!reset_n)
         presentState <= RESET;
-        i2c_clock_cycles <= 8'd0; // reset cycle counter to avoid garbage
-    end
     else
         presentState <= nextState;
 end
@@ -115,8 +116,6 @@ begin
 				sda_out_en = 'd1;
 			else if (i2c_clock_cycles > 17 && i2c_clock_cycles <= 33)
 				sda_out_en = 'd1;
-            else if (i2c_clock_cycles > 35 && i2c_clock_cycles <= 51)
-                sda_out_en = 'd1;
 			else
 				sda_out_en = 'd0;
 		end
@@ -235,7 +234,7 @@ begin
                 33: i2c_sda_state = write_configuration_1[0];
 					 34: begin end // do nothing 						// ACK bit - Do nothing
                 35: begin end // do nothing 
-                36: i2c_sda_state = write_configuration_2[7]; // Then Send the second Configuration Data byte
+                    36: i2c_sda_state = write_configuration_2[7]; // Then Send the Configuration Data (placeholder)
                 37: i2c_sda_state = write_configuration_2[7];
                 38: i2c_sda_state = write_configuration_2[6];
                 39: i2c_sda_state = write_configuration_2[6];
@@ -251,7 +250,7 @@ begin
                 49: i2c_sda_state = write_configuration_2[1];
                 50: i2c_sda_state = write_configuration_2[0];
                 51: i2c_sda_state = write_configuration_2[0];
-                52: begin end // do nothing 						// ACK bit - Do nothing
+                	52: begin end // do nothing 						// ACK bit - Do nothing
                 53: begin end // do nothing 
                 default:
                     begin end // do nothing 
@@ -328,7 +327,7 @@ begin
             i2c_sclk_local_output   <= i2c_sclk_local_output;
         WRITE:
             begin
-                i2c_clock_cycles        <= (i2c_clock_cycles + 'd1) % 54; // <-- updated to cover two config bytes
+                i2c_clock_cycles        <= (i2c_clock_cycles + 'd1) % 36;
                 i2c_sclk_local_output   <= ~i2c_sclk_local_output;
             end  
         STOP_WR: 
@@ -345,7 +344,7 @@ begin
             i2c_sclk_local_output   <= 1'd0;
         START_READ_STABLE:
             i2c_sclk_local_output   <= i2c_sclk_local_output;
-        READ:
+        READ:                                                             // For TX: Send Address followed by writedata
             begin
                 i2c_clock_cycles        <= (i2c_clock_cycles + 'd1) % 54;
                 i2c_sclk_local_output   <= ~i2c_sclk_local_output;
@@ -386,8 +385,8 @@ begin
             nextState = START_WR_STABLE;
         START_WR_STABLE:
             nextState = WRITE;
-        WRITE:
-            if(i2c_clock_cycles == 53)
+        WRITE:                                                             // For TX: Send Address followed by writedata
+            if(i2c_clock_cycles == 35)
                 nextState = STOP_WR;
             else
                 nextState = WRITE;
@@ -405,7 +404,7 @@ begin
             nextState = START_READ_STABLE;
         START_READ_STABLE:
             nextState = READ;
-        READ:
+        READ:                                                             // For TX: Send Address followed by writedata
             if(i2c_clock_cycles == 53)
                 nextState = STOP_READ;
             else
@@ -415,10 +414,10 @@ begin
         STOP_READ_READY:
             nextState = STOP_READ_STABLE;
         STOP_READ_STABLE:
-				if(counter_last == 180_00)
-					nextState = START_READ;
+				if(counter_last == 180_00)			// WAIT FOR 18_000 (180ms) 
+					nextState = START_READ; 		//WAIT_RDWR;
 				else
-					nextState = STOP_READ_STABLE;
+					nextState = STOP_READ_STABLE; //WAIT_RDWR;
         default:
             nextState = RESET;
     endcase
@@ -427,7 +426,7 @@ end
 
 // Core Signals 
 assign I2C_SCLK     = i2c_sclk_local_output;
-assign I2C_SDA      = sda_out_en ? i2c_sda_state : 1'bz;
+assign I2C_SDA      = sda_out_en ? i2c_sda_state : 1'bz;				// Assign SDA line with tri-state buffer logic
 assign I2C_SCLK_Ref = i2c_sclk_local;
 assign I2C_SCLK_Ref_200k = i2c_sclk_local_200khz;
 

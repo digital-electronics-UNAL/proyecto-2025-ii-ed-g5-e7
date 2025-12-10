@@ -1,3 +1,9 @@
-build/
+# Archivos de simulación
+*.vcd
 sim_build/
-.bak
+
+# Carpetas de compilación
+build/
+
+# Archivos de respaldo
+*.bak
